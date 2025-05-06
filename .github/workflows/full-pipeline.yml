@@ -10,16 +10,6 @@ on:
 jobs:
   build-test:
     runs-on: ubuntu-latest
-    services:
-      api:
-        image: python:3.9-slim
-        ports:
-          - 8000:8000
-        options: >-
-          --health-cmd "curl --fail http://localhost:8000/health || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - uses: actions/checkout@v2
       - name: Set up Python
