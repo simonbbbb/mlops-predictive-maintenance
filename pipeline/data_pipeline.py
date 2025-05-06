@@ -15,8 +15,8 @@ def generate_sensor_data(equipment_id, days=30, frequency_minutes=5, failure_pro
     start_time = end_time - timedelta(days=days)
     timestamps = pd.date_range(start=start_time, end=end_time, freq=f'{frequency_minutes}min')
     data = {
-        'timestamp': timestamps,
-        'equipment_id': equipment_id,
+        'timestamp': [],
+        'equipment_id': [],
         'temperature': [],
         'vibration': [],
         'pressure': [],
@@ -44,6 +44,8 @@ def generate_sensor_data(equipment_id, days=30, frequency_minutes=5, failure_pro
             if j == i + failure_countdown - 1:
                 failure_detected = True
             if j == i:
+                data['timestamp'].append(timestamps[j])
+                data['equipment_id'].append(equipment_id)
                 data['temperature'].append(temp)
                 data['vibration'].append(vibration)
                 data['pressure'].append(pressure)
