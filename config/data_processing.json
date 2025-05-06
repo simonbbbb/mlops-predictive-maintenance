@@ -1,0 +1,22 @@
+{
+  "expected_columns": [
+    "timestamp",
+    "equipment_id",
+    "temperature",
+    "vibration",
+    "pressure",
+    "noise_level",
+    "failure"
+  ],
+  "value_ranges": {
+    "temperature": {"min": 50, "max": 120},
+    "vibration": {"min": 0, "max": 5},
+    "pressure": {"min": 50, "max": 200},
+    "noise_level": {"min": 30, "max": 120}
+  },
+  "feature_engineering": {
+    "rolling_windows": true,
+    "window_sizes": [3, 6, 12]
+  },
+  "prediction_window": 12
+} 

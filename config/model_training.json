@@ -1,0 +1,23 @@
+{
+  "mlflow": {
+    "experiment_name": "predictive_maintenance"
+  },
+  "model_type": "random_forest",
+  "model_params": {
+    "n_estimators": 100,
+    "max_depth": 8,
+    "random_state": 42
+  },
+  "target_column": "failure_within_window",
+  "feature_columns": [
+    "temperature", "vibration", "pressure", "noise_level",
+    "temperature_rolling_mean_3", "temperature_rolling_std_3",
+    "vibration_rolling_mean_3", "vibration_rolling_std_3",
+    "pressure_rolling_mean_3", "pressure_rolling_std_3",
+    "noise_level_rolling_mean_3", "noise_level_rolling_std_3",
+    "hour", "day_of_week"
+  ],
+  "exclude_columns": ["timestamp", "equipment_id", "failure"],
+  "test_size": 0.2,
+  "random_state": 42
+} 

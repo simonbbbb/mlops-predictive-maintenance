@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+pandas
+numpy
+scikit-learn
+mlflow
+dvc[s3]
+great_expectations
+pytest
+pytest-cov
+python-dotenv
+requests 
