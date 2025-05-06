@@ -8,6 +8,8 @@ dvc[s3]
 great_expectations
 pytest
 pytest-cov
+pytest-mock
+pytest-order
 python-dotenv
 requests
 pandera 

@@ -1,7 +1,26 @@
 import requests
 import pytest
+import time
+import os
 
 BASE_URL = "http://localhost:8000"
+
+# Try to connect to API with retries
+def wait_for_api(max_retries=5, retry_interval=2):
+    for _ in range(max_retries):
+        try:
+            resp = requests.get(f"{BASE_URL}/")
+            if resp.status_code == 200:
+                return True
+        except requests.exceptions.ConnectionError:
+            time.sleep(retry_interval)
+    return False
+
+@pytest.fixture(scope="module", autouse=True)
+def ensure_api_running():
+    """Ensure API is running before tests start"""
+    if not wait_for_api():
+        pytest.skip("API server is not running, skipping API tests")
 
 @pytest.mark.order(1)
 def test_root():

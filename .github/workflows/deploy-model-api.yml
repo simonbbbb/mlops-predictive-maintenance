@@ -16,11 +16,37 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: '3.9'
+      
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-cov
+          pip install pytest pytest-cov pytest-mock
+
+      - name: Setup project
+        run: |
+          # Create required directories
+          mkdir -p data/raw data/processed data/validation_results models/metadata
+          
+          # Generate and process test data
+          python pipeline/data_pipeline.py
+          
+          # Train model
+          python model/train.py
+          
+      - name: Start API server
+        run: |
+          # Start API server in background
+          nohup python -m uvicorn api.main:app --host 0.0.0.0 --port 8000 > api.log 2>&1 &
+          # Wait for server to start
+          sleep 5
+
       - name: Run tests
         run: |
           pytest --cov=./ --cov-report=xml 
+          
+      - name: Upload coverage report
+        uses: codecov/codecov-action@v1
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false 
