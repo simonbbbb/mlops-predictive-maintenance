@@ -6,14 +6,15 @@ import time
 import os
 import json
 from typing import Dict, Tuple
-import great_expectations as ge
+import pandera as pa
+from pandera import Column, DataFrameSchema, Check
 
 def generate_sensor_data(equipment_id, days=30, frequency_minutes=5, failure_probability=0.05):
     """Generate simulated sensor data with occasional anomalies."""
     # Create timestamp range
     end_time = datetime.now()
     start_time = end_time - timedelta(days=days)
-    timestamps = pd.date_range(start=start_time, end=end_time, freq=f'{frequency_minutes}min')
+    timestamps = pd.date_range(start=start_time, end=end_time, freq=str(frequency_minutes) + "min")
     data = {
         'timestamp': [],
         'equipment_id': [],
@@ -53,7 +54,7 @@ def generate_sensor_data(equipment_id, days=30, frequency_minutes=5, failure_pro
                 data['failure'].append(1 if failure_detected else 0)
     df = pd.DataFrame(data)
     os.makedirs('data/raw', exist_ok=True)
-    filename = f'data/raw/sensor_data_equipment_{equipment_id}_{datetime.now().strftime("%Y%m%d")}.csv'
+    filename = 'data/raw/sensor_data_equipment_' + str(equipment_id) + '_' + datetime.now().strftime("%Y%m%d") + '.csv'
     df.to_csv(filename, index=False)
     return filename
 
@@ -66,46 +67,90 @@ class DataPreprocessor:
         os.makedirs('data/validation_results', exist_ok=True)
 
     def validate_data(self, df: pd.DataFrame) -> Tuple[bool, Dict]:
-        """Validate the input data using Great Expectations."""
-        ge_df = ge.from_pandas(df)
-        validation_results = {}
-        expected_columns = self.config['expected_columns']
-        validation_results['has_required_columns'] = all(col in df.columns for col in expected_columns)
-        validation_results['missing_values'] = df[expected_columns].isnull().sum().to_dict()
+        """Validate the input data using Pandera."""
+        # Create schema based on config
+        schema_dict = {
+            "timestamp": Column(pa.DateTime),
+            "equipment_id": Column(pa.Int),
+        }
+        
+        # Add validation for value ranges based on config
         for col, ranges in self.config['value_ranges'].items():
-            if col in df.columns:
-                validation_results[f'{col}_in_range'] = ge_df.expect_column_values_to_be_between(
-                    col, ranges['min'], ranges['max']
-                ).success
-        validation_results['no_duplicate_timestamps'] = not df.duplicated(
-            subset=['equipment_id', 'timestamp']
-        ).any()
-        validation_success = all([
-            validation_results['has_required_columns'],
-            validation_results['no_duplicate_timestamps'],
-            all(validation_results[f'{col}_in_range'] for col in self.config['value_ranges'] if col in df.columns)
-        ])
+            if col == 'temperature':
+                schema_dict[col] = Column(pa.Float, Check.in_range(ranges['min'], ranges['max']))
+            elif col == 'vibration':
+                schema_dict[col] = Column(pa.Float, Check.in_range(ranges['min'], ranges['max']))
+            elif col == 'pressure':
+                schema_dict[col] = Column(pa.Float, Check.in_range(ranges['min'], ranges['max']))
+            elif col == 'noise_level':
+                schema_dict[col] = Column(pa.Float, Check.in_range(ranges['min'], ranges['max']))
+                
+        # Add failure column check (should be 0 or 1)
+        schema_dict["failure"] = Column(pa.Int, Check.isin([0, 1]))
+                
+        # Create schema
+        schema = DataFrameSchema(schema_dict)
+        
+        # Check for required columns
+        expected_columns = self.config['expected_columns']
+        has_required_columns = all(col in df.columns for col in expected_columns)
+        
+        # Check for duplicates
+        no_duplicate_timestamps = not df.duplicated(subset=['equipment_id', 'timestamp']).any()
+        
+        validation_results = {
+            'has_required_columns': has_required_columns,
+            'no_duplicate_timestamps': no_duplicate_timestamps,
+            'missing_values': df[expected_columns].isnull().sum().to_dict()
+        }
+        
+        # Validate with schema
+        try:
+            schema.validate(df, lazy=True)
+            for col, ranges in self.config['value_ranges'].items():
+                if col in df.columns:
+                    validation_results[col + '_in_range'] = True
+            validation_success = all([
+                validation_results['has_required_columns'],
+                validation_results['no_duplicate_timestamps'],
+                all(validation_results.get(col + '_in_range', False) for col in self.config['value_ranges'] if col in df.columns)
+            ])
+        except pa.errors.SchemaErrors as e:
+            validation_results['schema_errors'] = e.failure_cases.to_dict()
+            for col, ranges in self.config['value_ranges'].items():
+                if col in df.columns:
+                    # Check if there are errors for this column
+                    if 'column' in e.failure_cases.columns and col in e.failure_cases['column'].values:
+                        validation_results[col + '_in_range'] = False
+                    else:
+                        validation_results[col + '_in_range'] = True
+            validation_success = False
+        
         return validation_success, validation_results
 
     def preprocess_data(self, input_path: str) -> str:
         df = pd.read_csv(input_path)
+        
+        # Convert timestamp to datetime before validation
+        if df['timestamp'].dtype == 'object':
+            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            
         is_valid, validation_results = self.validate_data(df)
-        validation_file = f'data/validation_results/validation_{os.path.basename(input_path)}.json'
+        validation_file = 'data/validation_results/validation_' + os.path.basename(input_path) + '.json'
         with open(validation_file, 'w') as f:
             json.dump(validation_results, f, indent=2)
         if not is_valid:
-            print(f"Data validation failed for {input_path}. See {validation_file} for details.")
+            print("Data validation failed for " + input_path + ". See " + validation_file + " for details.")
             return None
-        if df['timestamp'].dtype == 'object':
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            
         if self.config.get('feature_engineering', {}).get('rolling_windows', False):
             window_sizes = self.config['feature_engineering']['window_sizes']
             for col in ['temperature', 'vibration', 'pressure', 'noise_level']:
                 for window in window_sizes:
-                    df[f'{col}_rolling_mean_{window}'] = df.groupby('equipment_id')[col].rolling(
+                    df[col + '_rolling_mean_' + str(window)] = df.groupby('equipment_id')[col].rolling(
                         window=window, min_periods=1
                     ).mean().reset_index(level=0, drop=True)
-                    df[f'{col}_rolling_std_{window}'] = df.groupby('equipment_id')[col].rolling(
+                    df[col + '_rolling_std_' + str(window)] = df.groupby('equipment_id')[col].rolling(
                         window=window, min_periods=1
                     ).std().reset_index(level=0, drop=True).fillna(0)
         df['hour'] = df['timestamp'].dt.hour
@@ -115,7 +160,7 @@ class DataPreprocessor:
             df['failure_within_window'] = df.groupby('equipment_id')['failure'].rolling(
                 window=window, min_periods=1
             ).max().reset_index(level=0, drop=True)
-        output_path = f'data/processed/processed_{os.path.basename(input_path)}'
+        output_path = 'data/processed/processed_' + os.path.basename(input_path)
         df.to_csv(output_path, index=False)
         return output_path
 

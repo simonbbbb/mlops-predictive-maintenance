@@ -140,8 +140,17 @@ def predict(data: SensorData):
         for feature in missing_features:
             input_data[feature] = 0
         input_features = input_data[feature_names]
-        prediction_proba = model.predict_proba(input_features)[0][1]
-        prediction = 1 if prediction_proba >= 0.5 else 0
+        
+        # Handle single class prediction
+        proba_result = model.predict_proba(input_features)
+        # If only one class is predicted (always class 0)
+        if proba_result.shape[1] == 1:
+            prediction_proba = 0.0
+            prediction = 0
+        else:
+            prediction_proba = proba_result[0][1]
+            prediction = 1 if prediction_proba >= 0.5 else 0
+            
         response = PredictionResponse(
             prediction_id=str(uuid.uuid4()),
             equipment_id=data.equipment_id,
@@ -173,8 +182,17 @@ def predict_batch(batch_data: BatchSensorData):
             for feature in missing_features:
                 input_data[feature] = 0
             input_features = input_data[feature_names]
-            prediction_proba = model.predict_proba(input_features)[0][1]
-            prediction = 1 if prediction_proba >= 0.5 else 0
+            
+            # Handle single class prediction
+            proba_result = model.predict_proba(input_features)
+            # If only one class is predicted (always class 0)
+            if proba_result.shape[1] == 1:
+                prediction_proba = 0.0
+                prediction = 0
+            else:
+                prediction_proba = proba_result[0][1]
+                prediction = 1 if prediction_proba >= 0.5 else 0
+                
             predictions.append(
                 PredictionResponse(
                     prediction_id=str(uuid.uuid4()),

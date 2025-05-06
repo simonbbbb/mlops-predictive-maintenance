@@ -9,4 +9,5 @@ great_expectations
 pytest
 pytest-cov
 python-dotenv
-requests 
+requests
+pandera 

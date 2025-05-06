@@ -67,17 +67,32 @@ class ModelTrainer:
             model.fit(X_train, y_train)
             y_pred = model.predict(X_test)
             accuracy = accuracy_score(y_test, y_pred)
-            f1 = f1_score(y_test, y_pred)
+            f1 = f1_score(y_test, y_pred, zero_division=0)
             logger.info(f"Model performance: Accuracy = {accuracy:.4f}, F1 Score = {f1:.4f}")
             mlflow.log_metric("accuracy", accuracy)
             mlflow.log_metric("f1_score", f1)
             cm = confusion_matrix(y_test, y_pred)
-            cm_dict = {
-                "true_negatives": int(cm[0][0]),
-                "false_positives": int(cm[0][1]),
-                "false_negatives": int(cm[1][0]),
-                "true_positives": int(cm[1][1])
-            }
+            if cm.shape == (1, 1):
+                cm_dict = {
+                    "true_negatives": int(cm[0][0]),
+                    "false_positives": 0,
+                    "false_negatives": 0,
+                    "true_positives": 0
+                }
+            elif cm.shape == (2, 2):
+                cm_dict = {
+                    "true_negatives": int(cm[0][0]),
+                    "false_positives": int(cm[0][1]),
+                    "false_negatives": int(cm[1][0]),
+                    "true_positives": int(cm[1][1])
+                }
+            else:
+                cm_dict = {
+                    "true_negatives": 0,
+                    "false_positives": 0,
+                    "false_negatives": 0,
+                    "true_positives": 0
+                }
             mlflow.log_dict(cm_dict, "confusion_matrix.json")
             report = classification_report(y_test, y_pred, output_dict=True)
             mlflow.log_dict(report, "classification_report.json")
